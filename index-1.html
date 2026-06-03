@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SCALP PRO — EMA · RSI · VOL</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#04080d;
+  --panel:#080f18;
+  --border:#0e1f2e;
+  --accent:#00ffe0;
+  --long:#00ff88;
+  --short:#ff2d55;
+  --warn:#ffcc00;
+  --dim:#2a4a5a;
+  --text:#a8c8d8;
+  --muted:#1a3040;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'JetBrains Mono',monospace;
+  min-height:100vh;
+  overflow-x:hidden;
+}
+/* Grid background */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(0,255,224,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,255,224,.025) 1px,transparent 1px);
+  background-size:32px 32px;
+  pointer-events:none;z-index:0;
+}
+/* Scanline effect */
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 4px);
+  pointer-events:none;z-index:0;
+}
+
+.wrap{max-width:900px;margin:0 auto;padding:16px;position:relative;z-index:1;}
+
+/* HEADER */
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 0 14px;
+  border-bottom:1px solid var(--border);
+  margin-bottom:18px;
+  flex-wrap:wrap;gap:10px;
+}
+.logo{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:28px;
+  letter-spacing:.1em;
+  color:var(--accent);
+  text-shadow:0 0 20px rgba(0,255,224,.4);
+}
+.logo em{color:var(--text);opacity:.3;font-style:normal;}
+.live-dot{
+  display:inline-block;width:8px;height:8px;
+  border-radius:50%;background:var(--long);
+  margin-right:6px;
+  animation:pulse 1.5s infinite;
+}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,255,136,.4);}50%{opacity:.6;box-shadow:0 0 0 6px rgba(0,255,136,0);}}
+
+/* PAIR SELECTOR */
+.pair-row{
+  display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;
+}
+.pair-btn{
+  background:var(--panel);
+  border:1px solid var(--border);
+  color:var(--dim);
+  padding:6px 14px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;
+  cursor:pointer;
+  transition:all .15s;
+  letter-spacing:.05em;
+}
+.pair-btn:hover{border-color:var(--accent);color:var(--accent);}
+.pair-btn.active{border-color:var(--accent);color:var(--bg);background:var(--accent);font-weight:700;}
+
+/* TIMEFRAME */
+.tf-row{display:flex;gap:6px;margin-bottom:18px;align-items:center;}
+.tf-label{font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-right:4px;}
+.tf-btn{
+  background:transparent;border:1px solid var(--border);
+  color:var(--dim);padding:4px 10px;
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  cursor:pointer;transition:all .15s;
+}
+.tf-btn:hover{border-color:var(--warn);color:var(--warn);}
+.tf-btn.active{border-color:var(--warn);color:var(--bg);background:var(--warn);font-weight:700;}
+
+/* SCAN BUTTON */
+.scan-row{display:flex;gap:10px;margin-bottom:16px;}
+.scan-btn{
+  flex:1;
+  background:var(--accent);color:var(--bg);
+  border:none;padding:13px;
+  font-family:'Bebas Neue',sans-serif;
+  font-size:20px;letter-spacing:.15em;
+  cursor:pointer;
+  transition:all .2s;
+  position:relative;overflow:hidden;
+}
+.scan-btn::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);
+  transform:translateX(-100%);transition:transform .4s;
+}
+.scan-btn:hover::before{transform:translateX(100%);}
+.scan-btn:hover{box-shadow:0 0 30px rgba(0,255,224,.3);}
+.scan-btn:disabled{background:var(--muted);color:var(--dim);cursor:not-allowed;box-shadow:none;}
+
+/* STATUS */
+.status{
+  font-size:10px;color:var(--dim);
+  letter-spacing:.06em;margin-bottom:12px;
+  min-height:14px;
+}
+.status.active{color:var(--accent);}
+
+/* PROGRESS */
+.prog-wrap{height:2px;background:var(--border);margin-bottom:16px;display:none;}
+.prog-wrap.on{display:block;}
+.prog-bar{height:100%;background:var(--accent);width:0%;transition:width .3s;}
+
+/* 3 SIGNAL LEGEND */
+.legend{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:8px;margin-bottom:18px;
+}
+.leg-item{
+  background:var(--panel);border:1px solid var(--border);
+  padding:10px 12px;
+  border-top:2px solid;
+}
+.leg-item:nth-child(1){border-top-color:#ff9f43;}
+.leg-item:nth-child(2){border-top-color:#5352ed;}
+.leg-item:nth-child(3){border-top-color:var(--accent);}
+.leg-name{font-size:10px;font-weight:700;letter-spacing:.1em;margin-bottom:3px;}
+.leg-item:nth-child(1) .leg-name{color:#ff9f43;}
+.leg-item:nth-child(2) .leg-name{color:#5352ed;}
+.leg-item:nth-child(3) .leg-name{color:var(--accent);}
+.leg-desc{font-size:8px;color:var(--dim);line-height:1.5;letter-spacing:.04em;}
+
+/* SIGNAL CARDS */
+.cards{display:flex;flex-direction:column;gap:8px;}
+.card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-left:3px solid var(--dim);
+  padding:14px 16px;
+  animation:slideIn .3s ease;
+  cursor:pointer;
+  transition:border-color .15s;
+}
+.card:hover{border-color:var(--accent);}
+.card.long{border-left-color:var(--long);}
+.card.short{border-left-color:var(--short);}
+.card.wait{border-left-color:var(--dim);}
+@keyframes slideIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+
+.card-top{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;}
+.card-sym{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.08em;color:#fff;}
+.card-price{font-size:9px;color:var(--dim);margin-top:2px;}
+
+/* Signal scores */
+.scores{display:flex;gap:6px;flex-wrap:wrap;}
+.score-pill{
+  padding:4px 9px;font-size:9px;letter-spacing:.06em;
+  border:1px solid;font-weight:700;
+}
+.score-pill.ema-bull{border-color:#ff9f43;color:#ff9f43;background:rgba(255,159,67,.08);}
+.score-pill.ema-bear{border-color:#ff2d55;color:#ff2d55;background:rgba(255,45,85,.08);}
+.score-pill.ema-neu{border-color:var(--dim);color:var(--dim);}
+.score-pill.rsi-ob{border-color:#ff2d55;color:#ff2d55;background:rgba(255,45,85,.08);}
+.score-pill.rsi-os{border-color:var(--long);color:var(--long);background:rgba(0,255,136,.08);}
+.score-pill.rsi-neu{border-color:var(--dim);color:var(--dim);}
+.score-pill.vol-high{border-color:var(--accent);color:var(--accent);background:rgba(0,255,224,.08);}
+.score-pill.vol-low{border-color:var(--dim);color:var(--dim);}
+
+.signal-badge{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:18px;letter-spacing:.1em;
+  padding:6px 14px;
+  text-align:center;
+  min-width:80px;
+}
+.signal-badge.long{background:rgba(0,255,136,.12);color:var(--long);border:1px solid var(--long);}
+.signal-badge.short{background:rgba(255,45,85,.12);color:var(--short);border:1px solid var(--short);}
+.signal-badge.wait{background:rgba(42,74,90,.2);color:var(--dim);border:1px solid var(--dim);}
+
+/* Detail */
+.card-detail{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
+.card.open .card-detail{display:block;}
+
+.trade-box{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:8px;margin-bottom:12px;
+}
+.trade-item label{display:block;font-size:8px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;}
+.trade-item .tv{font-size:13px;font-weight:700;}
+.tv.entry{color:#fff;}
+.tv.sl{color:var(--short);}
+.tv.tp{color:var(--long);}
+
+.confirm-row{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 12px;
+  background:rgba(0,255,136,.05);
+  border:1px solid rgba(0,255,136,.15);
+  font-size:10px;
+  color:var(--long);
+  letter-spacing:.05em;
+}
+.confirm-row.wait-box{
+  background:rgba(255,204,0,.05);
+  border-color:rgba(255,204,0,.15);
+  color:var(--warn);
+}
+
+/* EMPTY */
+.empty{
+  text-align:center;padding:60px 20px;
+  border:1px dashed var(--border);
+  color:var(--dim);
+}
+.empty .big{font-family:'Bebas Neue',sans-serif;font-size:48px;letter-spacing:.1em;opacity:.15;display:block;margin-bottom:8px;}
+
+/* FOOTER */
+footer{margin-top:24px;padding-top:14px;border-top:1px solid var(--border);font-size:8px;color:var(--dim);text-align:center;letter-spacing:.08em;line-height:2;}
+
+@media(max-width:520px){
+  .legend{grid-template-columns:1fr;}
+  .trade-box{grid-template-columns:repeat(3,1fr);}
+  .card-top{grid-template-columns:1fr auto;}
+  .signal-badge{min-width:60px;font-size:15px;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo">SCALP<em>/</em>PRO <span style="font-size:13px;color:var(--dim);font-family:'JetBrains Mono'">3 SEÑALES</span></div>
+    <div style="font-size:10px;color:var(--dim)"><span class="live-dot"></span>EMA · RSI · VOLUMEN</div>
+  </header>
+
+  <!-- PAR -->
+  <div style="font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px;">Selecciona pares (o escanea todos)</div>
+  <div class="pair-row" id="pairRow" style="max-height:120px;overflow-y:auto;padding-bottom:4px;">
+    <button class="pair-btn active" data-pair="ALL">⚡ TODOS (100)</button>
+    <button class="pair-btn" data-pair="BTCUSDT">BTC</button>
+    <button class="pair-btn" data-pair="ETHUSDT">ETH</button>
+    <button class="pair-btn" data-pair="SOLUSDT">SOL</button>
+    <button class="pair-btn" data-pair="BNBUSDT">BNB</button>
+    <button class="pair-btn" data-pair="XRPUSDT">XRP</button>
+    <button class="pair-btn" data-pair="DOGEUSDT">DOGE</button>
+    <button class="pair-btn" data-pair="ADAUSDT">ADA</button>
+    <button class="pair-btn" data-pair="AVAXUSDT">AVAX</button>
+    <button class="pair-btn" data-pair="LINKUSDT">LINK</button>
+    <button class="pair-btn" data-pair="MATICUSDT">MATIC</button>
+    <button class="pair-btn" data-pair="DOTUSDT">DOT</button>
+    <button class="pair-btn" data-pair="LTCUSDT">LTC</button>
+    <button class="pair-btn" data-pair="UNIUSDT">UNI</button>
+    <button class="pair-btn" data-pair="ATOMUSDT">ATOM</button>
+    <button class="pair-btn" data-pair="ETCUSDT">ETC</button>
+  </div>
+
+  <!-- TIMEFRAME -->
+  <div class="tf-row">
+    <span class="tf-label">TF:</span>
+    <button class="tf-btn active" data-tf="1m">1m</button>
+    <button class="tf-btn" data-tf="3m">3m</button>
+    <button class="tf-btn" data-tf="5m">5m</button>
+    <button class="tf-btn" data-tf="15m">15m</button>
+  </div>
+
+  <!-- LEYENDA -->
+  <div class="legend">
+    <div class="leg-item">
+      <div class="leg-name">① EMA 9/21</div>
+      <div class="leg-desc">Cruce de medias rápidas.<br>9 cruza arriba de 21 = LONG.<br>Abajo = SHORT.</div>
+    </div>
+    <div class="leg-item">
+      <div class="leg-name">② RSI 14</div>
+      <div class="leg-desc">Momentum del precio.<br>&lt;30 = sobreventa (LONG).<br>&gt;70 = sobrecompra (SHORT).</div>
+    </div>
+    <div class="leg-item">
+      <div class="leg-name">③ VOL SPIKE</div>
+      <div class="leg-desc">Volumen vs media 20 velas.<br>×2 = confirmación fuerte.<br>Evita entrar sin volumen.</div>
+    </div>
+  </div>
+
+  <!-- SCAN -->
+  <div class="scan-row">
+    <button class="scan-btn" id="scanBtn" onclick="runScan()">⚡ ESCANEAR 50 PARES</button>
+  </div>
+
+  <div class="prog-wrap" id="progWrap"><div class="prog-bar" id="progBar"></div></div>
+  <div class="status" id="status">Selecciona par y timeframe → Escanear</div>
+
+  <div class="cards" id="cards">
+    <div class="empty">
+      <span class="big">SCALP</span>
+      <p>Pulsa ESCANEAR para analizar<br>con las 3 señales profesionales</p>
+    </div>
+  </div>
+
+  <footer>
+    SEÑAL 1: EMA 9/21 CRUCE &nbsp;|&nbsp; SEÑAL 2: RSI 14 EXTREMOS &nbsp;|&nbsp; SEÑAL 3: VOLUMEN SPIKE<br>
+    Datos: Binance API (datos reales) &nbsp;|&nbsp; Solo educativo — gestiona tu riesgo
+  </footer>
+</div>
+
+<script>
+let activePair = 'ALL';
+let activeTF = '1m';
+
+// Pair selector
+document.querySelectorAll('.pair-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.pair-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    activePair = b.dataset.pair;
+  });
+});
+
+// TF selector
+document.querySelectorAll('.tf-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.tf-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    activeTF = b.dataset.tf;
+  });
+});
+
+// Fetch klines from Binance
+async function fetchKlines(symbol, interval, limit = 50) {
+  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  const data = await res.json();
+  return data.map(k => ({
+    open: parseFloat(k[1]),
+    high: parseFloat(k[2]),
+    low: parseFloat(k[3]),
+    close: parseFloat(k[4]),
+    volume: parseFloat(k[5])
+  }));
+}
+
+// EMA calculation
+function calcEMA(closes, period) {
+  const k = 2 / (period + 1);
+  let ema = closes[0];
+  for (let i = 1; i < closes.length; i++) {
+    ema = closes[i] * k + ema * (1 - k);
+  }
+  return ema;
+}
+
+function calcEMASeries(closes, period) {
+  const k = 2 / (period + 1);
+  let ema = closes[0];
+  const result = [ema];
+  for (let i = 1; i < closes.length; i++) {
+    ema = closes[i] * k + ema * (1 - k);
+    result.push(ema);
+  }
+  return result;
+}
+
+// RSI calculation
+function calcRSI(closes, period = 14) {
+  if (closes.length < period + 1) return 50;
+  let gains = 0, losses = 0;
+  for (let i = closes.length - period; i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1];
+    if (diff > 0) gains += diff; else losses -= diff;
+  }
+  const rs = gains / (losses || 0.0001);
+  return 100 - 100 / (1 + rs);
+}
+
+// Volume spike
+function calcVolSpike(candles) {
+  const vols = candles.map(c => c.volume);
+  const avg = vols.slice(0, -1).reduce((a, b) => a + b, 0) / (vols.length - 1);
+  const last = vols[vols.length - 1];
+  return { ratio: last / avg, avg, last };
+}
+
+// Analyze a single pair
+async function analyzePair(symbol, tf) {
+  const candles = await fetchKlines(symbol, tf, 60);
+  const closes = candles.map(c => c.close);
+  const price = closes[closes.length - 1];
+
+  // Signal 1: EMA 9/21
+  const ema9Series = calcEMASeries(closes, 9);
+  const ema21Series = calcEMASeries(closes, 21);
+  const ema9 = ema9Series[ema9Series.length - 1];
+  const ema21 = ema21Series[ema21Series.length - 1];
+  const ema9Prev = ema9Series[ema9Series.length - 2];
+  const ema21Prev = ema21Series[ema21Series.length - 2];
+  const emaCross = ema9 > ema21 && ema9Prev <= ema21Prev ? 'bull-cross' :
+                   ema9 < ema21 && ema9Prev >= ema21Prev ? 'bear-cross' :
+                   ema9 > ema21 ? 'bull' : 'bear';
+  const emaDiff = ((ema9 - ema21) / ema21 * 100).toFixed(3);
+
+  // Signal 2: RSI 14
+  const rsi = calcRSI(closes, 14);
+  const rsiZone = rsi < 30 ? 'oversold' : rsi > 70 ? 'overbought' : 'neutral';
+
+  // Signal 3: Volume spike
+  const vol = calcVolSpike(candles);
+  const volStrong = vol.ratio >= 1.8;
+
+  // DECISION — scalp logic
+  let direction = 'WAIT';
+  let confidence = 0;
+  let reasons = [];
+
+  // LONG conditions
+  if ((emaCross === 'bull' || emaCross === 'bull-cross') && rsiZone !== 'overbought') {
+    confidence += 40;
+    reasons.push('EMA9 > EMA21');
+  }
+  if (emaCross === 'bull-cross') { confidence += 15; reasons.push('CRUCE ALCISTA'); }
+  if (rsiZone === 'oversold') { confidence += 25; reasons.push('RSI SOBREVENTA'); }
+  else if (rsi > 40 && rsi < 60) { confidence += 10; reasons.push('RSI NEUTRO'); }
+  if (volStrong) { confidence += 20; reasons.push(`VOL ×${vol.ratio.toFixed(1)}`); }
+
+  // SHORT conditions
+  let shortConf = 0;
+  if ((emaCross === 'bear' || emaCross === 'bear-cross') && rsiZone !== 'oversold') shortConf += 40;
+  if (emaCross === 'bear-cross') shortConf += 15;
+  if (rsiZone === 'overbought') shortConf += 25;
+  if (volStrong) shortConf += 20;
+
+  if (confidence >= 60) direction = 'LONG';
+  else if (shortConf >= 60) { direction = 'SHORT'; confidence = shortConf; }
+
+  // ATR — volatilidad real del mercado
+  const atrPeriod = 14;
+  const trs = [];
+  for (let i=1; i<candles.length; i++) {
+    const h=candles[i].high, l=candles[i].low, pc=candles[i-1].close;
+    trs.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+  }
+  const atr = trs.slice(-atrPeriod).reduce((a,b)=>a+b,0)/atrPeriod;
+
+  // SL = ATR×1.5 | TP1 = ATR×2 (R:R 1:2) | TP2 = ATR×3 (R:R 1:3)
+  const slDist  = atr * 1.5;
+  const tp1Dist = atr * 2.0;
+  const tp2Dist = atr * 3.0;
+
+  const sl  = direction === 'LONG' ? price - slDist  : price + slDist;
+  const tp1 = direction === 'LONG' ? price + tp1Dist : price - tp1Dist;
+  const tp2 = direction === 'LONG' ? price + tp2Dist : price - tp2Dist;
+
+  const slPct  = (slDist/price*100).toFixed(2);
+  const tp1Pct = (tp1Dist/price*100).toFixed(2);
+  const tp2Pct = (tp2Dist/price*100).toFixed(2);
+
+  return { symbol, price, direction, confidence,
+    ema: { ema9, ema21, cross: emaCross, diff: emaDiff },
+    rsi: { value: rsi.toFixed(1), zone: rsiZone },
+    vol: { ratio: vol.ratio.toFixed(2), strong: volStrong },
+    atr, reasons, sl, tp1, tp2, slPct, tp1Pct, tp2Pct };
+}
+
+function priceStr(p) {
+  if (p >= 1000) return p.toFixed(2);
+  if (p >= 1) return p.toFixed(4);
+  return p.toFixed(6);
+}
+
+function renderCard(r, idx) {
+  const dir = r.direction.toLowerCase();
+  const emaClass = r.ema.cross.includes('bull') ? 'ema-bull' : r.ema.cross.includes('bear') ? 'ema-bear' : 'ema-neu';
+  const emaLabel = r.ema.cross === 'bull-cross' ? '🟠 EMA CRUCE ↑' : r.ema.cross === 'bear-cross' ? '🟠 EMA CRUCE ↓' : r.ema.cross === 'bull' ? '🟠 EMA ALCISTA' : '🟠 EMA BAJISTA';
+  const rsiClass = r.rsi.zone === 'oversold' ? 'rsi-os' : r.rsi.zone === 'overbought' ? 'rsi-ob' : 'rsi-neu';
+  const rsiLabel = `🟣 RSI ${r.rsi.value}`;
+  const volClass = r.vol.strong ? 'vol-high' : 'vol-low';
+  const volLabel = `🔵 VOL ×${r.vol.ratio}`;
+
+  const detailHtml = r.direction !== 'WAIT' ? `
+    <div style="font-size:8px;color:var(--dim);letter-spacing:.1em;margin-bottom:8px;">
+      📐 ATR: $${priceStr(r.atr)} &nbsp;|&nbsp; R:R 1:2 &nbsp;|&nbsp; SL=ATR×1.5 · TP1=ATR×2 · TP2=ATR×3
+    </div>
+    <div class="trade-box">
+      <div class="trade-item"><label>🎯 Entrada</label><div class="tv entry">$${priceStr(r.price)}</div></div>
+      <div class="trade-item"><label>🛑 SL −${r.slPct}%</label><div class="tv sl">$${priceStr(r.sl)}</div></div>
+      <div class="trade-item"><label>✅ TP1 +${r.tp1Pct}%</label><div class="tv tp">$${priceStr(r.tp1)}</div></div>
+    </div>
+    <div class="trade-box" style="margin-top:6px;">
+      <div class="trade-item"><label>🎯 TP2 +${r.tp2Pct}%</label><div class="tv tp" style="color:#00ffe0;">$${priceStr(r.tp2)}</div></div>
+      <div class="trade-item"><label>💰 Riesgo</label><div class="tv sl">−${r.slPct}%</div></div>
+      <div class="trade-item"><label>📈 Ganancia</label><div class="tv tp">+${r.tp1Pct}%</div></div>
+    </div>
+    <div class="${r.confidence >= 75 ? 'confirm-row' : 'confirm-row wait-box'}">
+      ${r.confidence >= 75 ? '✅ SEÑAL FUERTE — ENTRA CON LÍMITE' : '⚠ SEÑAL MODERADA — ESPERA CONFIRMACIÓN'}
+      &nbsp;|&nbsp; Conf: ${r.confidence}%
+    </div>
+  ` : `<div class="confirm-row wait-box">⏳ Sin confluencia suficiente — NO entrar</div>`;
+
+  return `
+    <div class="card ${dir}" onclick="this.classList.toggle('open')">
+      <div class="card-top">
+        <div>
+          <div class="card-sym">${r.symbol.replace('USDT','')} <span style="font-size:12px;opacity:.4;font-family:'JetBrains Mono'">USDT</span></div>
+          <div class="card-price">$${priceStr(r.price)} &nbsp;·&nbsp; ${activeTF}</div>
+        </div>
+        <div class="scores">
+          <span class="score-pill ${emaClass}">${emaLabel}</span>
+          <span class="score-pill ${rsiClass}">${rsiLabel}</span>
+          <span class="score-pill ${volClass}">${volLabel}</span>
+        </div>
+        <div class="signal-badge ${dir}">${r.direction}</div>
+      </div>
+      <div class="card-detail">${detailHtml}</div>
+    </div>`;
+}
+
+// Top 50 pares más líquidos de Binance
+const ALL_PAIRS = [
+  'BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT',
+  'LINKUSDT','DOTUSDT','LTCUSDT','UNIUSDT','ATOMUSDT','ETCUSDT','XLMUSDT','BCHUSDT',
+  'APTUSDT','NEARUSDT','ARBUSDT','OPUSDT','INJUSDT','SUIUSDT','LDOUSDT','STXUSDT',
+  'AAVEUSDT','MKRUSDT','FILUSDT','ICPUSDT','RUNEUSDT','FTMUSDT','RNDRUSDT','FETUSDT',
+  'WLDUSDT','JUPUSDT','BONKUSDT','WIFUSDT','TAOUSDT','TONUSDT','KASUSDT','APEUSDT',
+  'GRTUSDT','IMXUSDT','GMTUSDT','SANDUSDT','MANAUSDT','AXSUSDT','HBARUSDT','ALGOUSDT',
+  'EGLDUSDT','VETUSDT'
+];
+
+async function runScan() {
+  const btn = document.getElementById('scanBtn');
+  const status = document.getElementById('status');
+  const cards = document.getElementById('cards');
+  const prog = document.getElementById('progWrap');
+  const bar = document.getElementById('progBar');
+
+  btn.disabled = true;
+  btn.textContent = '⟳ ANALIZANDO...';
+  status.textContent = 'Conectando a Binance...';
+  status.className = 'status active';
+  prog.classList.add('on');
+  bar.style.width = '5%';
+  cards.innerHTML = '';
+
+  const pairsToScan = activePair === 'ALL' ? ALL_PAIRS : [activePair];
+  const results = [];
+
+  // Scan in batches of 5 to avoid rate limits
+  const batchSize = 5;
+  for (let i = 0; i < pairsToScan.length; i++) {
+    const pair = pairsToScan[i];
+    status.textContent = `Analizando ${i+1}/${pairsToScan.length}: ${pair.replace('USDT','')}...`;
+    try {
+      const r = await analyzePair(pair, activeTF);
+      results.push(r);
+      // Show signals as they come in
+      if (r.direction !== 'WAIT') {
+        const signalsSoFar = results.filter(x => x.direction !== 'WAIT').sort((a,b) => b.confidence - a.confidence);
+        cards.innerHTML = signalsSoFar.map((x,idx) => renderCard(x,idx)).join('') ||
+          '<div class="empty"><span class="big" style="font-size:24px">BUSCANDO...</span></div>';
+      }
+    } catch(e) {
+      console.warn('Skip', pair, e.message);
+    }
+    bar.style.width = `${5 + (i+1)/pairsToScan.length * 90}%`;
+    if ((i+1) % batchSize === 0) await new Promise(r => setTimeout(r, 150));
+  }
+
+  // Final sort: LONG first, then SHORT, then by confidence
+  const signals = results.filter(r => r.direction !== 'WAIT').sort((a,b) => b.confidence - a.confidence);
+
+  bar.style.width = '100%';
+  status.textContent = `✓ ${signals.length} señal(es) en ${pairsToScan.length} pares — TF: ${activeTF} — Toca para ver plan`;
+  status.className = 'status';
+
+  if (!signals.length) {
+    cards.innerHTML = '<div class="empty"><span class="big">—</span><p>Sin señales activas ahora<br>Prueba otro timeframe o espera</p></div>';
+  } else {
+    cards.innerHTML = signals.map((r,i) => renderCard(r,i)).join('');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '⚡ ESCANEAR';
+  setTimeout(() => prog.classList.remove('on'), 800);
+}
+</script>
+</body>
+</html>
